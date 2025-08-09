@@ -326,7 +326,6 @@ module core (
   logic [31:0] mem_to_reg_data_mem;
   // Control signals
   logic reg_write_mem;
-  logic mem_write_mem;
   logic mem_to_reg_mem;
   logic branch_mem;
   logic jump_mem;

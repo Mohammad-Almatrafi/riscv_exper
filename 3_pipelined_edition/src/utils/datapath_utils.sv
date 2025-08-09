@@ -20,7 +20,7 @@ module n_bit_reg_wclr #(
 );
 
   always @(posedge clk, negedge rst_n) begin
-    if (~rst_n || clear) data_out <= 32'b0;
+    if (~rst_n || clear) data_out <= 'b0;
     else if (wen) data_out <= data_in;
   end
 endmodule
@@ -157,7 +157,7 @@ module adder_subtractor (
 
   wire [31:0] _b;
   assign _b = b ^ {32{sub}};
-  assign add_sub_result = a + _b + sub;
+  assign add_sub_result = a + _b + {31'b0, sub};
 endmodule
 
 

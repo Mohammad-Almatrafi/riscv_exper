@@ -164,8 +164,8 @@ module store_aligner (
   logic [15:0] half_store;
   assign offset = alu_result_address[1:0];
 
-  assign byte_store = reg_read & 32'h000000FF;
-  assign half_store = reg_read & 32'h0000FFFF;
+  assign byte_store = reg_read[7:0];
+  assign half_store = reg_read[15:0];
 
   always_comb begin
     case (f3)

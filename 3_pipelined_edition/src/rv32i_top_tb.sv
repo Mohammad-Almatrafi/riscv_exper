@@ -22,11 +22,18 @@ module rv32i_top_tb;
   always #5 clk = ~clk;
 
   initial begin
+    $dumpfile("../wavedumps/wavedump.vcd");
+    $dumpvars(0, DUT);
+  end
+
+  initial begin
     rst_n = 1'b1;
     #5;
     rst_n = 1'b0;
     #5;
     rst_n = 1'b1;
+    repeat (10000) @(negedge clk);
+    $finish;
   end
 
 

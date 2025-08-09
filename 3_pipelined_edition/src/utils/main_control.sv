@@ -111,7 +111,7 @@ module main_control (
         jump = 1'b1;
         jalr = 1'b1;
       end
-
+      default: ;
     endcase
   end
   assign alu_op = alu_op_enum;

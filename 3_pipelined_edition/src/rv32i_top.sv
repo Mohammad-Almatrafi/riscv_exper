@@ -10,11 +10,11 @@ module rv32i_top #(
 );
 
   logic [31:0] inst_if;
-  logic [ 3:0] byte_mask_mem;
+  logic [3:0] byte_mask_mem;
   logic [31:0] mem_read_data;
   logic [31:0] mem_addr_mem;
   logic [31:0] mem_write_data;
-  logic [31:0] mem_write_mem;
+  logic mem_write_mem;
   logic [31:0] current_pc_if;
 
   core rv32i_core (
