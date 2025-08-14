@@ -1,5 +1,3 @@
-import holy_core_pkg::*;
-
 /*
  * register with clear
  *
@@ -20,7 +18,7 @@ module n_bit_reg_wclr #(
 );
 
   always @(posedge clk, negedge rst_n) begin
-    if (~rst_n || clear) data_out <= 'b0;
+    if (~rst_n | clear) data_out <= 'b0;
     else if (wen) data_out <= data_in;
   end
 endmodule
@@ -44,8 +42,13 @@ module program_counter (
 );
 
   always @(posedge clk, negedge rst_n) begin
-    if (~rst_n) pc <= 32'b0;
-    else if (en) pc <= next_pc;
+    if (~rst_n) begin
+// `ifdef tracer
+      pc <= 32'h80000000;
+// `else
+//       pc <= 32'h0;
+// `endif
+    end else if (en) pc <= next_pc;
   end
 endmodule
 
@@ -119,7 +122,7 @@ module imm_gen (
     output logic [31:0] immediate
 );
 
-  always_comb begin
+  always @(*) begin
     case (imm_source)
       // For I-Types
       3'b000:  immediate = {{20{raw_src[24]}}, raw_src[24:13]};
@@ -197,9 +200,12 @@ module alu (
       .sub(alu_control[0]),
       .add_sub_result(add_sub_out)
   );
+
+  import holy_core_pkg::*;
+
   alu_control_t alu_control_enum;
   assign alu_control_enum = alu_control_t'(alu_control);
-  always_comb begin
+  always @(*) begin
     case (alu_control_enum)
       ALU_ADD:  alu_result = add_sub_out;
       ALU_AND:  alu_result = src1 & src2;

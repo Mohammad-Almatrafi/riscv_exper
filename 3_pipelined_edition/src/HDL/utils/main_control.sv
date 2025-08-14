@@ -1,6 +1,3 @@
-import holy_core_pkg::*;
-
-
 /*
  * HOLY CORE CONTROL UNIT
  *
@@ -33,6 +30,8 @@ module main_control (
     output logic auipc,
     output logic mem_to_reg
 );
+
+  import holy_core_pkg::*;
 
   alu_op_t alu_op_enum;
   opcode_t opcode_enum;

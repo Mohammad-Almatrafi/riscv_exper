@@ -135,7 +135,7 @@ package holy_core_pkg;
     logic [4:0]  rs2_addr;
     logic [4:0]  rd_addr;
     logic [2:0]  func3;
-    logic [31:0] rdata2_frw;
+    logic [31:0] rs2_data;
     logic [31:0] imm;
     logic [31:0] alu_result;
 

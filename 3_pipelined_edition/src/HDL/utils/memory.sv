@@ -15,7 +15,7 @@
 `timescale 1ns / 1ps
 
 module memory #(
-    parameter WORDS = 128,
+    parameter WORDS = 1024,
     parameter MEM_INIT = ""
 ) (
     input logic clk,
@@ -37,7 +37,7 @@ module memory #(
     end
   end
 
-  localparam addr_bit_size = $clog2(WORDS) - 1;
+  parameter addr_bit_size = $clog2(WORDS) - 1;
 
   wire [addr_bit_size:0] word_address;
   assign word_address = address[addr_bit_size+2:2];
@@ -45,10 +45,10 @@ module memory #(
   // Write operation
   always @(posedge clk) begin
     if (write_enable) begin
-      if (byte_enable[0]) mem[word_address][7:0] = write_data[7:0];
-      if (byte_enable[1]) mem[word_address][15:8] = write_data[15:8];
-      if (byte_enable[2]) mem[word_address][23:16] = write_data[23:16];
-      if (byte_enable[3]) mem[word_address][31:24] = write_data[31:24];
+      if (byte_enable[0]) mem[word_address][7:0] <= write_data[7:0];
+      if (byte_enable[1]) mem[word_address][15:8] <= write_data[15:8];
+      if (byte_enable[2]) mem[word_address][23:16] <= write_data[23:16];
+      if (byte_enable[3]) mem[word_address][31:24] <= write_data[31:24];
     end
   end
 

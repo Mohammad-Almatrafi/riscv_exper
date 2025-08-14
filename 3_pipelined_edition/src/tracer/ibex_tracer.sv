@@ -34,6 +34,7 @@
  * to the one produced by objdump. This simplifies the correlation between the static program
  * information from the objdump-generated disassembly, and the runtime information from this tracer.
  */
+
 module ibex_tracer (
   input logic        clk_i,
   input logic        rst_ni,
@@ -766,8 +767,9 @@ module ibex_tracer (
   end
 
   always_comb begin
-    decoded_str = "";
-    data_accessed = 5'h0;
+    // decoded_str = "";
+    // data_accessed = 5'h0;
+
     insn_is_compressed = 0;
 
     // Check for compressed instructions
@@ -915,7 +917,7 @@ module ibex_tracer (
         INSN_LOAD:       decode_load_insn();
         INSN_STORE:      decode_store_insn();
         // MISC-MEM
-        INSN_FENCE:      decode_fence();
+        // INSN_FENCE:      decode_fence();
         INSN_FENCEI:     decode_mnemonic("fence.i");
         // RV32B - ZBA
         INSN_SH1ADD:     decode_r_insn("sh1add");
@@ -1075,3 +1077,4 @@ module ibex_tracer (
   end
 
 endmodule
+

@@ -1,9 +1,9 @@
 
 module rv32i_top #(
     parameter DATAMEM_FILE = "",
-    parameter DATAMEM_SIZE = 128,
+    parameter DATAMEM_SIZE = 10000,
     parameter TEXTMEM_FILE = "",
-    parameter TEXTMEM_SIZE = 128
+    parameter TEXTMEM_SIZE = 10000
 ) (
     input logic clk,
     input logic rst_n
@@ -16,11 +16,17 @@ module rv32i_top #(
   logic [31:0] mem_write_data;
   logic mem_write_mem;
   logic [31:0] current_pc_if;
+  logic stall_pipeline;
+
+  assign stall_pipeline = 1'b0;
+  logic noice;
+  // assign noice = |current_pc_if;
 
   core rv32i_core (
       .clk(clk),
       .rst_n(rst_n),
       .inst_if(inst_if),
+      .stall_pipeline(stall_pipeline),
       .mem_read_data(mem_read_data),
       .byte_mask_mem(byte_mask_mem),
       .mem_addr_mem(mem_addr_mem),

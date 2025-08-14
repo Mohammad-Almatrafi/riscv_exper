@@ -1,6 +1,3 @@
-import holy_core_pkg::*;
-
-
 /*
  * core
  *
@@ -15,6 +12,7 @@ module core (
     input logic clk,
     input logic rst_n,
     input logic [31:0] inst_if,
+    input logic stall_pipeline,
 
     input logic [31:0] mem_read_data,
 
@@ -26,6 +24,7 @@ module core (
     output logic [31:0] current_pc_if
 );
 
+  import holy_core_pkg::*;
 
   logic if_id_reg_en;
   logic id_exe_reg_en;
@@ -36,19 +35,10 @@ module core (
   logic exe_mem_reg_clr;
   logic mem_wb_reg_clr;
 
-  assign if_id_reg_en = 1'b1;
-  assign id_exe_reg_en = 1'b1;
-  assign exe_mem_reg_en = 1'b1;
-  assign mem_wb_reg_en = 1'b1;
-  assign if_id_reg_clr = 1'b0;
-  assign id_exe_reg_clr = 1'b0;
-  assign exe_mem_reg_clr = 1'b0;
-  assign mem_wb_reg_clr = 1'b0;
 
   logic pc_en;
   logic [31:0] next_pc;
   logic [31:0] pc_plus_4_if;
-  assign pc_en = 1'b1;
   program_counter PC_inst (
       .clk(clk),
       .rst_n(rst_n),
@@ -68,11 +58,10 @@ module core (
   assign if_id_in.current_pc = current_pc_if;
   assign if_id_in.pc_plus_4 = pc_plus_4_if;
 
-
-
+  localparam int IF_ID_BIT_WIDTH = $size(if_id_in);
 
   n_bit_reg_wclr #(
-      .N($size(if_id_reg_t))
+      .N(IF_ID_BIT_WIDTH)
   ) if_id_reg_inst (
       .clk(clk),
       .rst_n(rst_n),
@@ -112,6 +101,8 @@ module core (
   logic [31:0] rs1_data_id;
   logic [31:0] rs2_data_id;
 
+  logic [31:0] rs1_frw_id;
+  logic [31:0] rs2_frw_id;
 
   regfile regfile_inst (
       .clk  (clk),
@@ -126,6 +117,9 @@ module core (
       .write_data(rd_data_wb),
       .rd_addr(rd_addr_wb)
   );
+
+  assign rs1_frw_id = rs1_select_id ? rd_data_wb : rs1_data_id;
+  assign rs2_frw_id = rs2_select_id ? rd_data_wb : rs2_data_id;
 
 
   logic mem_write_id;
@@ -175,8 +169,8 @@ module core (
   assign id_exe_in.rs1_addr = rs1_addr_id;
   assign id_exe_in.rs2_addr = rs2_addr_id;
   assign id_exe_in.rd_addr = rd_addr_id;
-  assign id_exe_in.rs1_data = rs1_data_id;
-  assign id_exe_in.rs2_data = rs2_data_id;
+  assign id_exe_in.rs1_data = rs1_frw_id;
+  assign id_exe_in.rs2_data = rs2_frw_id;
   assign id_exe_in.func3 = func3_id;
   assign id_exe_in.func7 = func7_id;
   assign id_exe_in.imm = imm_id;
@@ -192,8 +186,10 @@ module core (
   assign id_exe_in.jalr = jalr_id;
   assign id_exe_in.alu_op = alu_op_id;
 
+  localparam int ID_EXE_BIT_WIDTH = $size(id_exe_in);
+
   n_bit_reg_wclr #(
-      .N($size(id_exe_reg_t))
+      .N(ID_EXE_BIT_WIDTH)
   ) id_exe_reg_inst (
       .clk(clk),
       .rst_n(rst_n),
@@ -248,19 +244,26 @@ module core (
   assign jalr_exe = id_exe_out.jalr;
   assign alu_op_exe = id_exe_out.alu_op;
 
-  logic [31:0] rdata1_frw_exe;
-  logic [31:0] rdata2_frw_exe;
   logic [31:0] alu_src1;
   logic [31:0] alu_src2;
   logic [31:0] alu_result_exe;
   logic [31:0] pc_jump_exe;
   logic zero_exe;
   logic [31:0] jump_base_value;
+  logic [31:0] rs1_frw_exe_inter;
+  logic [31:0] rs2_frw_exe_inter;
+  logic [31:0] rs1_frw_exe;
+  logic [31:0] rs2_frw_exe;
 
-  assign alu_src1 = auipc_exe ? current_pc_exe : rs1_data_exe;
-  assign alu_src2 = alu_source_exe ? imm_exe : rs2_data_exe;
+  assign rs1_frw_exe_inter = rs1_select_exe[0] ? rd_data_wb : rs1_data_exe;
+  assign rs2_frw_exe_inter = rs2_select_exe[0] ? rd_data_wb : rs2_data_exe;
+  assign rs1_frw_exe = rs1_select_exe[1] ? result_mem : rs1_frw_exe_inter;
+  assign rs2_frw_exe = rs2_select_exe[1] ? result_mem : rs2_frw_exe_inter;
 
-  assign jump_base_value = jalr_exe ? rs1_data_exe : current_pc_exe;
+  assign alu_src1 = auipc_exe ? current_pc_exe : rs1_frw_exe;
+  assign alu_src2 = alu_source_exe ? imm_exe : rs2_frw_exe;
+
+  assign jump_base_value = jalr_exe ? rs1_frw_exe : current_pc_exe;
   assign pc_jump_exe = jump_base_value + (imm_exe & ~32'd1);
 
   logic [3:0] alu_ctrl_exe;
@@ -271,7 +274,6 @@ module core (
       .func7(func7_exe),
       .alu_ctrl(alu_ctrl_exe)
   );
-  assign rdata2_frw_exe = rs2_data_exe;
 
   alu alu_inst (
       // IN
@@ -291,7 +293,7 @@ module core (
   assign exe_mem_in.rs2_addr = rs2_addr_exe;
   assign exe_mem_in.rd_addr = rd_addr_exe;
   assign exe_mem_in.func3 = func3_exe;
-  assign exe_mem_in.rdata2_frw = rdata2_frw_exe;
+  assign exe_mem_in.rs2_data = rs2_frw_exe;
   assign exe_mem_in.imm = imm_exe;
   assign exe_mem_in.alu_result = alu_result_exe;
 
@@ -303,8 +305,10 @@ module core (
   assign exe_mem_in.lui = lui_exe;
   assign exe_mem_in.zero = zero_exe;
 
+  localparam int EXE_MEM_REG_WIDTH = $size(exe_mem_in);
+
   n_bit_reg_wclr #(
-      .N($size(exe_mem_reg_t))
+      .N(EXE_MEM_REG_WIDTH)
   ) exe_mem_reg_inst (
       .clk(clk),
       .rst_n(rst_n),
@@ -320,7 +324,7 @@ module core (
   logic [4:0] rs2_addr_mem;
   logic [4:0] rd_addr_mem;
   logic [2:0] func3_mem;
-  logic [31:0] rdata2_frw_mem;
+  logic [31:0] rs2_data_mem;
   logic [31:0] imm_mem;
   logic [31:0] alu_result_mem;
   logic [31:0] mem_to_reg_data_mem;
@@ -339,7 +343,7 @@ module core (
   assign rs2_addr_mem = exe_mem_out.rs2_addr;
   assign rd_addr_mem = exe_mem_out.rd_addr;
   assign func3_mem = exe_mem_out.func3;
-  assign rdata2_frw_mem = exe_mem_out.rdata2_frw;
+  assign rs2_data_mem = exe_mem_out.rs2_data;
   assign imm_mem = exe_mem_out.imm;
   assign alu_result_mem = exe_mem_out.alu_result;
 
@@ -356,10 +360,14 @@ module core (
   logic [31:0] result_mem;
   assign result_1_mem = lui_mem ? imm_mem : alu_result_mem;
   assign result_mem   = jump_mem ? pc_plus_4_mem : result_1_mem;
+
+  logic [31:0] rs2_frw_mem;
+  assign rs2_frw_mem = rs2_select_mem ? rd_data_wb : rs2_data_mem;
+
   store_aligner store_aligner_inst (
       .alu_result_address(alu_result_mem),
       .f3(func3_mem),
-      .reg_read(rdata2_frw_mem),
+      .reg_read(rs2_frw_mem),
       .byte_enable(byte_mask_mem),
       .data(mem_write_data)
   );
@@ -391,8 +399,10 @@ module core (
   assign mem_wb_in.reg_write = reg_write_mem;
   assign mem_wb_in.mem_to_reg = mem_to_reg_mem;
 
+  localparam int MEM_WB_REG_WIDTH = $size(mem_wb_in);
+
   n_bit_reg_wclr #(
-      .N($size(mem_wb_reg_t))
+      .N(MEM_WB_REG_WIDTH)
   ) mem_wb_reg_inst (
       .clk(clk),
       .rst_n(rst_n),
@@ -418,6 +428,248 @@ module core (
   assign mem_to_reg_wb = mem_wb_out.mem_to_reg;
 
   assign rd_data_wb = mem_to_reg_wb ? mem_to_reg_data_wb : result_wb;
+
+  /*
+ * hazard control chunk
+ */
+
+  logic exe_use_rs1;
+  logic exe_use_rs2;
+  assign exe_use_rs1 = ~(auipc_id | lui_id);
+  assign exe_use_rs2 = r_type_id | branch_id;
+  logic load_hazard;
+  logic branch_hazard;
+
+
+  hazard_controller hazard_controller_inst (
+      .pc_sel_mem(pc_sel_mem),
+      .exe_use_rs1(exe_use_rs1),
+      .exe_use_rs2(exe_use_rs2),
+      .rs1_addr_id(rs1_addr_id),
+      .rs2_addr_id(rs2_addr_id),
+      .rd_addr_exe(rd_addr_exe),
+      .mem_read_exe(mem_to_reg_id),
+      .load_hazard(load_hazard),
+      .branch_hazard(branch_hazard)
+  );
+
+  pipeline_controller pipeline_controller_inst (
+      .load_hazard(load_hazard),
+      .branch_hazard(branch_hazard),
+      .stall_pipeline(stall_pipeline),
+
+      .pc_en(pc_en),
+      .if_id_reg_en(if_id_reg_en),
+      .id_exe_reg_en(id_exe_reg_en),
+      .exe_mem_reg_en(exe_mem_reg_en),
+      .mem_wb_reg_en(mem_wb_reg_en),
+      .if_id_reg_clr(if_id_reg_clr),
+      .id_exe_reg_clr(id_exe_reg_clr),
+      .exe_mem_reg_clr(exe_mem_reg_clr),
+      .mem_wb_reg_clr(mem_wb_reg_clr)
+  );
+
+
+  logic rs1_select_id, rs2_select_id;
+  logic [1:0] rs1_select_exe, rs2_select_exe;
+  logic rs2_select_mem;
+
+  forward_unit forward_unit_inst (
+      .rs1_addr_id (rs1_addr_id),
+      .rs2_addr_id (rs2_addr_id),
+      .rs1_addr_exe(rs1_addr_exe),
+      .rs2_addr_exe(rs2_addr_exe),
+      .rs2_addr_mem(rs2_addr_mem),
+      .rd_addr_mem (rd_addr_mem),
+      .rd_addr_wb  (rd_addr_wb),
+
+      .reg_write_mem(reg_write_mem),
+      .reg_write_wb (reg_write_wb),
+
+      .rs1_select_id (rs1_select_id),
+      .rs2_select_id (rs2_select_id),
+      .rs1_select_exe(rs1_select_exe),
+      .rs2_select_exe(rs2_select_exe),
+      .rs2_select_mem(rs2_select_mem)
+  );
+
+
+
+
+`ifdef tracer
+
+  logic rvfi_valid;
+  logic [31:0] inst_exe;
+  logic [31:0] inst_mem;
+  logic [31:0] inst_wb;
+  assign rvfi_valid = inst_wb != 0;
+
+  /*
+   * instruction passthrough
+   */
+
+  n_bit_reg_wclr #(
+      .N(32)
+  ) id_exe_instr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(id_exe_reg_en),
+      .clear(id_exe_reg_clr),
+      .data_in(inst_id),
+      .data_out(inst_exe)
+  );
+  n_bit_reg_wclr #(
+      .N(32)
+  ) exe_mem_instr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(exe_mem_reg_en),
+      .clear(exe_mem_reg_clr),
+      .data_in(inst_exe),
+      .data_out(inst_mem)
+  );
+  n_bit_reg_wclr #(
+      .N(32)
+  ) mem_wb_instr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(inst_mem),
+      .data_out(inst_wb)
+  );
+
+  logic [4:0] rs1_addr_mem;
+  logic [4:0] rs1_addr_wb;
+
+  n_bit_reg_wclr #(
+      .N(5)
+  ) exe_mem_rs1_addr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(exe_mem_reg_en),
+      .clear(exe_mem_reg_clr),
+      .data_in(rs1_addr_exe),
+      .data_out(rs1_addr_mem)
+  );
+  n_bit_reg_wclr #(
+      .N(5)
+  ) mem_wb_rs1_addr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(rs1_addr_mem),
+      .data_out(rs1_addr_wb)
+  );
+
+  logic [31:0] rs1_data_mem;
+  logic [31:0] rs1_data_wb;
+
+  n_bit_reg_wclr #(
+      .N(32)
+  ) exe_mem_rs1_data (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(exe_mem_reg_en),
+      .clear(exe_mem_reg_clr),
+      .data_in(rs1_frw_exe),
+      .data_out(rs1_data_mem)
+  );
+  n_bit_reg_wclr #(
+      .N(32)
+  ) mem_wb_rs1_data (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(rs1_data_mem),
+      .data_out(rs1_data_wb)
+  );
+
+  logic [4:0] rs2_addr_wb;
+  n_bit_reg_wclr #(
+      .N(5)
+  ) mem_wb_rs2_addr (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(rs2_addr_mem),
+      .data_out(rs2_addr_wb)
+  );
+
+  logic [31:0] rs2_data_wb;
+  n_bit_reg_wclr #(
+      .N(32)
+  ) mem_wb_rs2_data (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(rs2_frw_mem),
+      .data_out(rs2_data_wb)
+  );
+
+
+  logic pc_sel_wb;
+  n_bit_reg_wclr #(
+      .N(1)
+  ) mem_wb_pc_sel (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(pc_sel_mem),
+      .data_out(pc_sel_wb)
+  );
+
+  logic [31:0] current_pc_wb;
+  n_bit_reg_wclr #(
+      .N(32)
+  ) mem_wb_pc (
+      .clk(clk),
+      .rst_n(rst_n),
+      .wen(mem_wb_reg_en),
+      .clear(mem_wb_reg_clr),
+      .data_in(current_pc_mem),
+      .data_out(current_pc_wb)
+  );
+
+  logic [31:0] pc_wdata;
+  assign pc_wdata = pc_sel_wb ? current_pc_if : current_pc_wb + 4;
+  ibex_tracer tracer_inst (
+      .clk_i(clk),
+      .rst_ni(rst_n),
+      .hart_id_i(0),
+      .rvfi_valid(rvfi_valid),
+      .rvfi_insn(inst_wb),
+      .rvfi_rs1_addr(rs1_addr_wb),
+      .rvfi_rs2_addr(rs2_addr_wb),
+      .rvfi_rs1_rdata(rs1_data_wb),
+      .rvfi_rs2_rdata(rs2_data_wb),
+      .rvfi_rd_addr(rd_addr_wb),
+      .rvfi_rd_wdata(rd_data_wb),
+      .rvfi_pc_rdata(current_pc_wb),
+      .rvfi_pc_wdata(pc_wdata),
+      .rvfi_order(),
+      .rvfi_trap(),
+      .rvfi_halt(),
+      .rvfi_intr(),
+      .rvfi_mode(),
+      .rvfi_ixl(),
+      .rvfi_rs3_addr(),
+      .rvfi_rs3_rdata(),
+      .rvfi_mem_addr(),
+      .rvfi_mem_rmask(),
+      .rvfi_mem_wmask(),
+      .rvfi_mem_rdata(),
+      .rvfi_mem_wdata()
+
+  );
+
+
+`endif
 
 endmodule
 

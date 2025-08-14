@@ -1,75 +1,103 @@
-TEST_FILE:=
+NO_CSR_SYS = 1
+PWD = $(shell pwd)
+CORE_LOG_2_CSV  := python3 $(PWD)/scripts/core_log_to_trace_csv.py
+SPIKE_LOG_2_CSV := python3 $(PWD)/scripts/spike_log_to_trace_csv.py
+COMPARE         := python3 $(PWD)/scripts/instr_trace_compare.py
+CHANGE_LD := cd scripts && python3 edit_ld.py
+TRACER := 1
+DATA_MEM_PATH := src/tb/data_mem.mem
+TEXT_MEM_PATH := src/tb/text_mem.mem
+ELF_FILE_PATH := work/bin/out_config_00000.riscv
 
-SRCS:=src/utils/holy_core_pkg.sv \
-src/utils/control_utils.sv \
-src/utils/datapath_utils.sv \
-src/utils/defines.sv \
-src/utils/main_control.sv \
-src/utils/memory.sv \
-src/core.sv \
-src/rv32i_top.sv \
-src/rv32i_top_tb.sv
-src/LINT_SRCS:=utils/holy_core_pkg.sv \
-src/utils/control_utils.sv \
-src/utils/datapath_utils.sv \
-src/utils/defines.sv \
-src/utils/main_control.sv \
-src/utils/memory.sv \
-src/core.sv \
-src/rv32i_top.sv
+LINT_SRCS:=src/HDL/utils/holy_core_pkg.sv\
+src/HDL/utils/defines.sv\
+src/HDL/utils/control_utils.sv\
+src/HDL/utils/datapath_utils.sv\
+src/HDL/utils/main_control.sv\
+src/HDL/utils/memory.sv\
+src/HDL/core.sv \
+src/HDL/rv32i_top.sv
+
+ifeq ($(TRACER), 1)
+	TRACER_DEFINES = cd scripts && python3 tracer_defines.py 1
+else
+	TRACER_DEFINES = cd scripts && python3 tracer_defines.py 0
+endif
+
+ifeq ($(NO_CSR_SYS), 1)
+	REMOVE_CSR_PROCS = cd scripts && python3 edit_makefile.py\
+	cd scripts && python3 remove_csr.py ../work/asm/out_config_00000.S\
+	cd scripts && python3 remove_csr.py ../work/asm/out_config_00000_template.S\
+	cd scripts && python3 remove_csr.py ../work/common/crt.S\
+	cd scripts && python3 remove_core_spec.py
+else
+	REMOVE_CSR_PROCS =
+endif
+
+.PHONY: gen_test test_run HDL_design_run clean gen_and_run 
+
+gen_and_run: gen_test test_run
+
+work:
+	aapg setup
+
+gen_test: work
+	aapg gen
+	$(TRACER_DEFINES)
+	$(CHANGE_LD)
+	$(REMOVE_CSR_PROCS)
+
+logs_and_waves:
+	mkdir -p logs_and_waves
+output:
+	mkdir -p output
+
+.PHONY: gen_mem_files
 
 
-.PHONY: run build lint trace
 
-mem_files:
-	mkdir -p mem_files
 
-build:
-	mkdir -p build
+gen_mem_files:
+	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .data $(ELF_FILE_PATH) temp.hex
+	python3 scripts/objdump_format.py temp.hex
+	mv temp.hex $(DATA_MEM_PATH)
 
-wavedumps:
-	mkdir -p wavedumps
+	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .text.init -j .text $(ELF_FILE_PATH) temp.hex
+	python3 scripts/objdump_format.py temp.hex
+	mv temp.hex $(TEXT_MEM_PATH)
 
-run: build mem_files/text_mem.mem wavedumps
-	cd mem_files && ../build/rv32i_top_tb.sim
+test_run: logs_and_waves
+	cd work && make
+	python3 scripts/merge_spike_logs.py work/log/out_config_00000.log work/log/out_config_00000.dump > logs_and_waves/out_config_00000.log
+	cp work/bin/out_config_00000.riscv ./logs_and_waves
 
-compile: $(SRCS) build
-	verilator --binary -I./utils $(SRCS) \
---top-module rv32i_top_tb --trace --timing --Wno-DECLFILENAME \
-	-o ../build/rv32i_top_tb.sim
 
-lint:
-	verilator -Wall --lint-only $(LINT_SRCS) --Wno-DECLFILENAME
+HDL_design_run: gen_mem_files
+	cd src/tb && make
+	mv src/tb/dump.vcd src/tb/results.xml src/tb/mytrace_00000000.log ./logs_and_waves
 
-build_trace: build
-	verilator --binary verification/tracer/ibex_pkg.sv verification/tracer/ibex_tracer_pkg.sv verification/tracer/ibex_tracer.sv \
---top-module ibex_tracer --trace --timing --Wno-DECLFILENAME --Wno-MULTIDRIVEN
+.PHONY: log_to_csv compare
+log_to_csv: output
+	python3 scripts/ibex_log_to_trace_csv.py \
+		--log ./logs_and_waves/mytrace_00000000.log \
+		--csv output/core_trace.csv
+	python3 scripts/spike_log_to_trace_csv.py \
+		--log ./logs_and_waves/out_config_00000.log\
+		--csv output/spike_trace.csv --full_trace
 
-trace:
-	gtkwave wavedumps/wavedump.vcd
+compare: output
+	python3 scripts/instr_trace_compare.py --csv_file_1 output/core_trace.csv \
+	--csv_file_2 output/spike_trace.csv \
+	--csv_name_1 core --csv_name_2 spike
 
-test: tests/$(TEST_FILE) mem_files
-	riscv64-elf-as -mabi=ilp32 -march=rv32i tests/${TEST_FILE} -o build/${TEST_FILE}.o
-	riscv64-elf-ld -mabi=ilp32 -march=rv32i -m elf32lriscv -nostdlib -T tests/linker.ld -o build/${TEST_FILE}.elf build/${TEST_FILE}.o
 
-	riscv64-elf-objdump build/${TEST_FILE}.elf -D -S -M no-aliases -M numeric > build/${TEST_FILE}.dump
-
-	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .data build/${TEST_FILE}.elf temp.hex
-
-	sed '1s/^/@/; s/ /\n/g' temp.hex > mem_files/data_mem.mem
-	sed -i '1d' mem_files/data_mem.mem
-	tr -d '\r' < mem_files/data_mem.mem > temp && mv temp mem_files/data_mem.mem
-
-	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .text build/${TEST_FILE}.elf temp.hex
-
-	sed '1s/^/@/; s/ /\n/g' temp.hex > mem_files/text_mem.mem
-	sed -i '1d' mem_files/text_mem.mem
-	tr -d '\r' < mem_files/text_mem.mem > temp && mv temp mem_files/text_mem.mem
-	rm temp.hex
-	rm build/${TEST_FILE}.o
-	rm build/${TEST_FILE}.elf
-
-.PHONY: clean
 
 clean:
-	rm -rf build mem_files wavedumps obj_dir
+	rm -rf work logs_and_waves src/tb/sim_build \
+		src/tb/__pycache__ src/tb/text_mem.mem \
+		src/tb/data_mem.mem ouptut
+
+
+
+lint:
+	verilator --top rv32i_top -Wall --lint-only $(LINT_SRCS) --Wno-DECLFILENAME

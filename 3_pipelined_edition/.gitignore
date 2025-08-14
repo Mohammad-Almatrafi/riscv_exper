@@ -1,6 +1,10 @@
-verification/
-obj_dir/
-wavedumps/
-build/
-mem_files/
+verification
+sim_build
+logs_and_waves
+work
+*.log
+*.vcd
+*.mem
+src/HDL/utils/defines.sv
+output
 
