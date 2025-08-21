@@ -18,7 +18,7 @@ async def rv32i_top_smoke_test(dut):
     dut.rst_n.value = 1
 
     # Let the design run for 10000 falling edges of clk
-    for _ in range(10000):
+    for _ in range(100000):
         await FallingEdge(dut.clk)
 
     # Simulation ends

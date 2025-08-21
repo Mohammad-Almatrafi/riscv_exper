@@ -17,7 +17,6 @@ module rv32i_top_wrapper (
     if ($test$plusargs("vcd")) begin
       $dumpfile("dump.vcd");
       $dumpvars(0, DUT);
-      $display("memory_size = %d",TEXTMEM_SIZE);
       $display("VCD tracing enabled");
     end
   end

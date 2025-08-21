@@ -11,7 +11,9 @@ text_start_addr = "  . = 0x80000000;\n"
 with open(ld_file, 'r') as f: 
     for line in f.readlines():
 
-        if "text: test code section" in line:
+        if "ALIGN" in line:
+            continue
+        elif "text: test code section" in line:
             check_text = 1
             file_line_list.append(line)
         elif "data segment" in line:

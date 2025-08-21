@@ -57,7 +57,10 @@ module alu_control (
           F3_SLT: alu_ctrl_enum = ALU_SLT;
           F3_SLTU: alu_ctrl_enum = ALU_SLTU;
           F3_XOR: alu_ctrl_enum = ALU_XOR;
-          F3_SRL_SRA: alu_ctrl_enum = ALU_SRL;
+          F3_SRL_SRA: begin
+            if (func7[5]) alu_ctrl_enum = ALU_SRA;
+            else alu_ctrl_enum = ALU_SRL;
+          end
           F3_OR: alu_ctrl_enum = ALU_OR;
           F3_AND: alu_ctrl_enum = ALU_AND;
           default: ;
@@ -139,7 +142,7 @@ module pipeline_controller (
     output mem_wb_reg_clr
 );
 
-  assign pc_en = ~(load_hazard | stall_pipeline);
+  assign pc_en = ~(load_hazard | stall_pipeline) | branch_hazard;
 
   assign if_id_reg_en = ~(load_hazard | branch_hazard);
   assign id_exe_reg_en = ~(stall_pipeline);
@@ -203,7 +206,7 @@ module forward_unit (
   logic rs2_select_exe_1;
 
   assign rs1_select_id = (rs1_addr_id == rd_addr_wb) & reg_write_wb & (rd_addr_wb != 0);
-  assign rs2_select_id = rs2_addr_id == rd_addr_wb & reg_write_wb & (rd_addr_wb != 0);
+  assign rs2_select_id = (rs2_addr_id == rd_addr_wb) & reg_write_wb & (rd_addr_wb != 0);
 
   assign rs1_select_exe_0 = (rs1_addr_exe == rd_addr_mem) & (rd_addr_mem != 0) & reg_write_mem;
   assign rs1_select_exe_1 = (rs1_addr_exe == rd_addr_wb) & (rd_addr_wb != 0) & reg_write_wb;
@@ -211,9 +214,9 @@ module forward_unit (
   assign rs2_select_exe_1 = (rs2_addr_exe == rd_addr_wb) & (rd_addr_wb != 0) & reg_write_wb;
 
   assign rs1_select_exe[0] = rs1_select_exe_0;
-  assign rs1_select_exe[1] = rs1_select_exe_1 & rs1_select_exe_0;
+  assign rs1_select_exe[1] = rs1_select_exe_1 & ~rs1_select_exe_0;
   assign rs2_select_exe[0] = rs2_select_exe_0;
-  assign rs2_select_exe[1] = rs2_select_exe_1 & rs2_select_exe_0;
+  assign rs2_select_exe[1] = rs2_select_exe_1 & ~rs2_select_exe_0;
 
   assign rs2_select_mem = (rs2_addr_mem == rd_addr_wb) & (rd_addr_wb != 0);
 

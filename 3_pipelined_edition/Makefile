@@ -58,11 +58,11 @@ output:
 
 
 gen_mem_files:
-	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .data $(ELF_FILE_PATH) temp.hex
+	riscv64-elf-objcopy --gap-fill=0xff --verilog-data-width 4 -O verilog -j .data $(ELF_FILE_PATH) temp.hex
 	python3 scripts/objdump_format.py temp.hex
 	mv temp.hex $(DATA_MEM_PATH)
 
-	riscv64-elf-objcopy --verilog-data-width 4 -O verilog -j .text.init -j .text $(ELF_FILE_PATH) temp.hex
+	riscv64-elf-objcopy --verilog-data-width 4 --gap-fill=0xff -O verilog -j .text.init -j .text $(ELF_FILE_PATH) temp.hex
 	python3 scripts/objdump_format.py temp.hex
 	mv temp.hex $(TEXT_MEM_PATH)
 
@@ -95,7 +95,8 @@ compare: output
 clean:
 	rm -rf work logs_and_waves src/tb/sim_build \
 		src/tb/__pycache__ src/tb/text_mem.mem \
-		src/tb/data_mem.mem ouptut
+		scripts/__pycache__ src/tb/data_mem.mem\
+		output/
 
 
 

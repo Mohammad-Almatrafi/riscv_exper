@@ -255,10 +255,10 @@ module core (
   logic [31:0] rs1_frw_exe;
   logic [31:0] rs2_frw_exe;
 
-  assign rs1_frw_exe_inter = rs1_select_exe[0] ? rd_data_wb : rs1_data_exe;
-  assign rs2_frw_exe_inter = rs2_select_exe[0] ? rd_data_wb : rs2_data_exe;
-  assign rs1_frw_exe = rs1_select_exe[1] ? result_mem : rs1_frw_exe_inter;
-  assign rs2_frw_exe = rs2_select_exe[1] ? result_mem : rs2_frw_exe_inter;
+  assign rs1_frw_exe_inter = rs1_select_exe[1] ? rd_data_wb : rs1_data_exe;
+  assign rs2_frw_exe_inter = rs2_select_exe[1] ? rd_data_wb : rs2_data_exe;
+  assign rs1_frw_exe = rs1_select_exe[0] ? result_mem : rs1_frw_exe_inter;
+  assign rs2_frw_exe = rs2_select_exe[0] ? result_mem : rs2_frw_exe_inter;
 
   assign alu_src1 = auipc_exe ? current_pc_exe : rs1_frw_exe;
   assign alu_src2 = alu_source_exe ? imm_exe : rs2_frw_exe;
@@ -448,7 +448,7 @@ module core (
       .rs1_addr_id(rs1_addr_id),
       .rs2_addr_id(rs2_addr_id),
       .rd_addr_exe(rd_addr_exe),
-      .mem_read_exe(mem_to_reg_id),
+      .mem_read_exe(mem_to_reg_exe),
       .load_hazard(load_hazard),
       .branch_hazard(branch_hazard)
   );
